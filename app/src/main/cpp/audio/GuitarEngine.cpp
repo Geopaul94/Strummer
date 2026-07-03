@@ -36,7 +36,6 @@ bool GuitarEngine::start() {
         return false;
     }
 
-    // Keep buffer small for low latency.
     const int32_t burst = mStream->getFramesPerBurst();
     mStream->setBufferSizeInFrames(burst * 2);
 
@@ -72,6 +71,40 @@ void GuitarEngine::muteAll() {
     mCommands.push({Command::Type::MuteAll, 0, 0, 0.0f});
 }
 
+void GuitarEngine::setTone(float brightness) {
+    if (brightness < 0.0f) brightness = 0.0f;
+    if (brightness > 1.0f) brightness = 1.0f;
+    mBrightness.store(brightness, std::memory_order_relaxed);
+}
+
+void GuitarEngine::setPalmMute(bool enabled) {
+    mPalmMute.store(enabled, std::memory_order_relaxed);
+}
+
+void GuitarEngine::startRecording() {
+    // Drain any stale samples so a new recording starts clean.
+    float scratch;
+    while (mRecFifo.pop(scratch)) { /* discard */ }
+    mRecording.store(true, std::memory_order_release);
+}
+
+void GuitarEngine::stopRecording() {
+    mRecording.store(false, std::memory_order_release);
+}
+
+bool GuitarEngine::isRecording() const {
+    return mRecording.load(std::memory_order_acquire);
+}
+
+int GuitarEngine::drainRecording(float* out, int maxFloats) {
+    int count = 0;
+    float sample;
+    while (count < maxFloats && mRecFifo.pop(sample)) {
+        out[count++] = sample;
+    }
+    return count;
+}
+
 void GuitarEngine::handlePluck(int stringIndex, int midiPitch, float velocity) {
     if (stringIndex < 0 || stringIndex >= kNumStrings) return;
 
@@ -79,12 +112,11 @@ void GuitarEngine::handlePluck(int stringIndex, int midiPitch, float velocity) {
     float freq = midiToFrequency(midiPitch);
     float vel = velocity < 0.0f ? 0.0f : (velocity > 1.0f ? 1.0f : velocity);
 
-    // Per-string monophony: re-plucking a string automatically cuts the
-    // previous note because we reinitialize the same KS delay line. The old
-    // tone is replaced by fresh noise, which then decays into the new pitch.
-    // This is exactly how a real guitar string behaves — you can't sound two
-    // notes on the same string simultaneously.
-    mStrings[stringIndex].pluck(sampleRate, freq, vel);
+    // Per-string monophony: re-plucking reinitializes the same KS delay line,
+    // which cuts the previous note. A real string can't sound two pitches at once.
+    float brightness = mBrightness.load(std::memory_order_relaxed);
+    bool palmMute = mPalmMute.load(std::memory_order_relaxed);
+    mStrings[stringIndex].pluck(sampleRate, freq, vel, brightness, palmMute);
 }
 
 void GuitarEngine::handleMute(int stringIndex) {
@@ -95,7 +127,7 @@ void GuitarEngine::handleMute(int stringIndex) {
 DataCallbackResult GuitarEngine::onAudioReady(AudioStream* stream,
                                                void* audioData,
                                                int32_t numFrames) {
-    // 1) Drain all pending commands from the ring buffer.
+    // 1) Drain all pending commands.
     Command cmd;
     while (mCommands.pop(cmd)) {
         switch (cmd.type) {
@@ -117,10 +149,8 @@ DataCallbackResult GuitarEngine::onAudioReady(AudioStream* stream,
     // 2) Clear the output buffer.
     for (int i = 0; i < numFrames * channels; ++i) out[i] = 0.0f;
 
-    // 3) Render each string and mix into the output.
-    // Guitar strings are panned slightly to simulate real string positions:
-    // low E is slightly left, high E slightly right.
-    // Pan values: -0.3, -0.18, -0.06, 0.06, 0.18, 0.3 (subtle, not extreme).
+    // 3) Render each string and mix. Strings are subtly panned low-E left →
+    //    high-E right to simulate real string positions across the neck.
     static constexpr float kPan[kNumStrings] = {
         -0.30f, -0.18f, -0.06f, 0.06f, 0.18f, 0.30f
     };
@@ -128,9 +158,8 @@ DataCallbackResult GuitarEngine::onAudioReady(AudioStream* stream,
     for (int si = 0; si < kNumStrings; ++si) {
         if (!mStrings[si].isActive()) continue;
 
-        // Pre-compute stereo gain from pan position.
-        // Equal-power panning: L = cos(θ), R = sin(θ), where θ = (pan+1)*π/4.
-        float theta = (kPan[si] + 1.0f) * 0.7853981633f; // π/4
+        // Equal-power panning: L = cos(θ), R = sin(θ), θ = (pan+1)*π/4.
+        float theta = (kPan[si] + 1.0f) * 0.7853981633f;
         float gainL = std::cos(theta);
         float gainR = std::sin(theta);
 
@@ -141,6 +170,23 @@ DataCallbackResult GuitarEngine::onAudioReady(AudioStream* stream,
                 out[f * channels + 1] += sample * gainR;
             } else {
                 out[f * channels] += sample;
+            }
+        }
+    }
+
+    // 4) If recording, capture the mixed output into the lock-free FIFO. We push
+    //    interleaved stereo (or duplicate mono to stereo) so Kotlin can write a
+    //    standard 2-channel WAV. push() drops silently if the FIFO is full, which
+    //    only happens if Kotlin stalls — better than blocking the audio thread.
+    if (mRecording.load(std::memory_order_acquire)) {
+        for (int f = 0; f < numFrames; ++f) {
+            if (channels >= 2) {
+                mRecFifo.push(out[f * channels + 0]);
+                mRecFifo.push(out[f * channels + 1]);
+            } else {
+                float s = out[f * channels];
+                mRecFifo.push(s);
+                mRecFifo.push(s);
             }
         }
     }

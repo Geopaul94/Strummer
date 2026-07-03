@@ -14,6 +14,18 @@ interface GuitarEngine {
     fun muteString(stringIndex: Int)
     fun muteAll()
 
+    // Tone brightness 0..1 (nylon ≈ 0.3, acoustic ≈ 0.5, electric ≈ 0.75).
+    fun setTone(brightness: Float)
+    // Palm mute: damped staccato notes.
+    fun setPalmMute(enabled: Boolean)
+
+    // Recording (captures the mixed stereo output).
+    fun startRecording()
+    fun stopRecording()
+    fun isRecording(): Boolean
+    // Drain available recorded samples into [out]; returns count of floats written.
+    fun drainRecording(out: FloatArray): Int
+
     fun diagnostics(): AudioDiagnostics
     fun release()
 }

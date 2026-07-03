@@ -56,6 +56,48 @@ Java_geo_strummer_data_audio_GuitarEngineBridge_nativeMuteAll(JNIEnv*, jobject, 
     engine(h)->muteAll();
 }
 
+JNIEXPORT void JNICALL
+Java_geo_strummer_data_audio_GuitarEngineBridge_nativeSetTone(
+        JNIEnv*, jobject, jlong h, jfloat brightness) {
+    engine(h)->setTone(brightness);
+}
+
+JNIEXPORT void JNICALL
+Java_geo_strummer_data_audio_GuitarEngineBridge_nativeSetPalmMute(
+        JNIEnv*, jobject, jlong h, jboolean enabled) {
+    engine(h)->setPalmMute(enabled == JNI_TRUE);
+}
+
+// --- Recording ---
+
+JNIEXPORT void JNICALL
+Java_geo_strummer_data_audio_GuitarEngineBridge_nativeStartRecording(JNIEnv*, jobject, jlong h) {
+    engine(h)->startRecording();
+}
+
+JNIEXPORT void JNICALL
+Java_geo_strummer_data_audio_GuitarEngineBridge_nativeStopRecording(JNIEnv*, jobject, jlong h) {
+    engine(h)->stopRecording();
+}
+
+JNIEXPORT jboolean JNICALL
+Java_geo_strummer_data_audio_GuitarEngineBridge_nativeIsRecording(JNIEnv*, jobject, jlong h) {
+    return engine(h)->isRecording() ? JNI_TRUE : JNI_FALSE;
+}
+
+// Drains available recorded samples into the Kotlin float array. Returns the
+// number of floats written (interleaved stereo).
+JNIEXPORT jint JNICALL
+Java_geo_strummer_data_audio_GuitarEngineBridge_nativeDrainRecording(
+        JNIEnv* env, jobject, jlong h, jfloatArray out) {
+    jsize capacity = env->GetArrayLength(out);
+    jfloat* buf = env->GetFloatArrayElements(out, nullptr);
+    int count = engine(h)->drainRecording(buf, static_cast<int>(capacity));
+    // JNI_COMMIT-style: copy back and free.
+    env->ReleaseFloatArrayElements(out, buf, 0);
+    return count;
+}
+
 // --- Diagnostics ---
 
 JNIEXPORT jint JNICALL

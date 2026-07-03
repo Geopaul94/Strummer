@@ -30,13 +30,23 @@ android {
         }
 
         ndk {
-            abiFilters += listOf("arm64-v8a", "x86_64")
+            // arm64 covers virtually all modern devices; armeabi-v7a keeps older
+            // budget OEM phones working; x86_64 is for the emulator.
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
         }
     }
 
+    // Note on ABI packaging: we ship an Android App Bundle (AAB), which splits by
+    // ABI automatically so each device downloads only its architecture. A manual
+    // `splits { abi }` block is therefore unnecessary and conflicts with the
+    // bundle task, so it's intentionally omitted.
+
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 shrinks + optimizes the release build. Keep rules protect the
+            // JNI bridge, Room, and Hilt (see proguard-rules.pro).
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -85,6 +95,12 @@ dependencies {
     implementation(libs.hilt.android)
     implementation(libs.androidx.hilt.navigation.compose)
     ksp(libs.hilt.compiler)
+
+    // Persistence for saved chord palettes + onboarding flag.
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
+    implementation(libs.androidx.datastore.preferences)
 
     implementation(libs.oboe)
 }

@@ -52,7 +52,10 @@ private val stringColors = listOf(
 
 @Composable
 fun StrumScreen(viewModel: StrumViewModel = hiltViewModel()) {
-    val state by viewModel.state.collectAsState()
+    val palette by viewModel.palette.collectAsState()
+    val selectedIndex by viewModel.selectedChordIndex.collectAsState()
+    val diagnostics by viewModel.diagnostics.collectAsState()
+    val selectedChord = palette.getOrNull(selectedIndex)
 
     Column(
         modifier = Modifier
@@ -68,12 +71,12 @@ fun StrumScreen(viewModel: StrumViewModel = hiltViewModel()) {
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                text = "Strummer",
+                text = "Strum",
                 color = Color(0xFFD7A86E),
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
             )
-            state.selectedChord?.let { chord ->
+            selectedChord?.let { chord ->
                 Text(
                     text = chord.displayName,
                     color = Color(0xFFEDE0D4),
@@ -84,10 +87,9 @@ fun StrumScreen(viewModel: StrumViewModel = hiltViewModel()) {
             }
         }
 
-        // Chord palette
         ChordPalette(
-            chords = state.palette,
-            selectedIndex = state.selectedChordIndex,
+            chords = palette,
+            selectedIndex = selectedIndex,
             onSelect = viewModel::selectChord,
             modifier = Modifier
                 .fillMaxWidth()
@@ -98,7 +100,7 @@ fun StrumScreen(viewModel: StrumViewModel = hiltViewModel()) {
 
         // Strum area — the hero
         StrumArea(
-            voicingFrets = state.selectedChord?.voicing?.frets,
+            voicingFrets = selectedChord?.voicing?.frets,
             onStrum = viewModel::strum,
             onPickString = viewModel::pickString,
             onMuteAll = viewModel::muteAll,
@@ -108,9 +110,8 @@ fun StrumScreen(viewModel: StrumViewModel = hiltViewModel()) {
                 .padding(horizontal = 8.dp),
         )
 
-        // Diagnostics (collapsible later)
         HorizontalDivider(color = Color(0xFF3E2723), modifier = Modifier.padding(horizontal = 16.dp))
-        DiagnosticsBar(state.diagnostics)
+        DiagnosticsBar(diagnostics)
     }
 }
 

@@ -37,6 +37,21 @@ class NativeGuitarEngine @Inject constructor(
 
     override fun muteAll() = GuitarEngineBridge.nativeMuteAll(handle)
 
+    override fun setTone(brightness: Float) =
+        GuitarEngineBridge.nativeSetTone(handle, brightness)
+
+    override fun setPalmMute(enabled: Boolean) =
+        GuitarEngineBridge.nativeSetPalmMute(handle, enabled)
+
+    override fun startRecording() = GuitarEngineBridge.nativeStartRecording(handle)
+
+    override fun stopRecording() = GuitarEngineBridge.nativeStopRecording(handle)
+
+    override fun isRecording(): Boolean = GuitarEngineBridge.nativeIsRecording(handle)
+
+    override fun drainRecording(out: FloatArray): Int =
+        GuitarEngineBridge.nativeDrainRecording(handle, out)
+
     override fun diagnostics(): AudioDiagnostics = AudioDiagnostics(
         sampleRate = GuitarEngineBridge.nativeGetSampleRate(handle),
         framesPerBurst = GuitarEngineBridge.nativeGetFramesPerBurst(handle),

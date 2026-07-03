@@ -16,6 +16,13 @@ internal object GuitarEngineBridge {
     external fun nativePluckString(handle: Long, stringIndex: Int, midiPitch: Int, velocity: Float)
     external fun nativeMuteString(handle: Long, stringIndex: Int)
     external fun nativeMuteAll(handle: Long)
+    external fun nativeSetTone(handle: Long, brightness: Float)
+    external fun nativeSetPalmMute(handle: Long, enabled: Boolean)
+
+    external fun nativeStartRecording(handle: Long)
+    external fun nativeStopRecording(handle: Long)
+    external fun nativeIsRecording(handle: Long): Boolean
+    external fun nativeDrainRecording(handle: Long, out: FloatArray): Int
 
     external fun nativeGetSampleRate(handle: Long): Int
     external fun nativeGetFramesPerBurst(handle: Long): Int

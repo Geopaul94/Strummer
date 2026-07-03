@@ -9,7 +9,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import dagger.hilt.android.AndroidEntryPoint
-import geo.strummer.presentation.strum.StrumScreen
+import geo.strummer.presentation.onboarding.OnboardingGate
+import geo.strummer.presentation.shell.StrummerShell
 import geo.strummer.presentation.theme.StrummerTheme
 
 @AndroidEntryPoint
@@ -23,7 +24,10 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
                 ) {
-                    StrumScreen()
+                    // Onboarding shows once on first launch, then the main shell.
+                    OnboardingGate {
+                        StrummerShell()
+                    }
                 }
             }
         }
